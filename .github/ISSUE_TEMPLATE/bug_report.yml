@@ -23,4 +23,4 @@ body:
     id: context
     attributes:
       label: Environment / logs
-      description: Relevant `ENVIRONMENT`, `X-Request-ID`, or log output. Scrub any secrets/tokens before pasting.
+      description: Relevant `ENVIRONMENT`, `message_id`, or log output. Scrub any secrets/tokens before pasting.
