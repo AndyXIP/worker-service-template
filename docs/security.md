@@ -1,43 +1,37 @@
 # Security
 
-## Auth
+## No inbound HTTP request surface
 
-`src/core/auth.py` is a **stub**, not real security. `get_current_principal`
-(wired via `Depends`) only checks that a bearer token is present — it does
-not verify a signature, expiry, or issuer, and accepts any non-empty token.
-It exists to demonstrate the wiring pattern (`Depends` on a route, a 401
-`AuthenticationError` → standard error envelope on failure) so every service
-doesn't reinvent that plumbing independently.
+This is a worker: it has no inbound HTTP API to authenticate against or lock
+down with CORS. The only HTTP surface is `health.py`'s `/utils/health`
+liveness check, which is intentionally unauthenticated — it exists for
+Docker `HEALTHCHECK`/k8s probes, not for clients, and carries no sensitive
+data.
 
-Replace `_authenticate` with real verification (JWT signature/expiry check,
-an introspection call to your identity provider, etc.) before relying on it
-for anything that matters. The example `items` writes (`POST`/`PATCH`/
-`DELETE`) require it; reads don't — adjust that split to your service's needs.
+If your service needs to call *outbound* authenticated APIs (an identity
+provider, another internal service, ...), that's a `services/`-layer
+concern — wire credentials into the client you use there, rather than
+reinventing an inbound-auth stub that doesn't apply to a worker.
 
-`Principal` (also in `auth.py`) is the authenticated caller; it currently
-carries only the raw token. Extend it once real verification yields more
-(user id, scopes, roles) — routes and services should depend on `Principal`,
-never parse the raw token themselves.
+## Message handling
 
-## CORS
+`src/core/errors.py`'s `classify_error()` maps every handler exception to a
+delivery outcome — `RETRY` or `DEAD_LETTER` — logged with a reason
+(`not_found`, `validation_error`, `transient_error`,
+`max_attempts_exceeded`). No stack trace or exception message is ever
+forwarded into the dead-letter message itself, only into the structured log
+line (`consumers/dispatch.py`) — keep that split if you extend the taxonomy,
+so dead-lettered payloads don't end up carrying internal error detail
+downstream.
 
-CORS middleware (`src/main.py`) is only added if `CORS_ORIGINS` (see
-`src/core/config.py`) is non-empty — no origins configured means no
-cross-origin access at all. When you do set origins:
+## In-memory queue is not multi-tenant-safe
 
-- `allow_credentials=True` means the browser will send cookies/auth headers
-  on cross-origin requests from those origins.
-- `allow_methods`/`allow_headers` are scoped to what this service actually
-  needs, not wildcarded. Combining `allow_credentials=True` with a `"*"`
-  wildcard on origins/methods/headers is a common footgun once real auth is
-  wired in — widen only when a specific method or header is genuinely required.
-
-## Error responses
-
-`src/core/errors.py` maps every error — validation, not-found, auth, or
-unhandled — to one consistent envelope (`{"error": {"type", "message",
-"details"}}`) and no internals leak on 500s (no stack trace, no exception
-message from unhandled exceptions).
+`InMemoryMessageQueue` and `InMemoryItemRepository` are single-process,
+in-memory examples with no access control of their own — anything running in
+the same process can publish/consume/read/write freely. That's fine for a
+template; a real broker/database brings its own auth (IAM policy, connection
+credentials, network policy) that should be configured before relying on
+this in a shared environment.
 
 ## Reporting a vulnerability
 

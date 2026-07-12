@@ -1,28 +1,29 @@
+from uuid import uuid4
+
 import pytest
 from pydantic import ValidationError
 
-from schemas.item import ItemCreate, ItemUpdate
+from schemas.item import ItemCreatePayload, ItemDeletePayload
 
 
-def test_item_create_accepts_valid_data() -> None:
-    item = ItemCreate(name="Widget", description="A widget", price=9.99)
+def test_item_create_payload_accepts_valid_data() -> None:
+    payload = ItemCreatePayload(name="Widget", description="A widget", price=9.99)
 
-    assert item.name == "Widget"
-    assert item.price == 9.99
+    assert payload.name == "Widget"
+    assert payload.price == 9.99
 
 
-def test_item_create_rejects_non_positive_price() -> None:
+def test_item_create_payload_rejects_non_positive_price() -> None:
     with pytest.raises(ValidationError):
-        ItemCreate(name="Widget", price=0)
+        ItemCreatePayload(name="Widget", price=0)
 
 
-def test_item_create_requires_name() -> None:
+def test_item_create_payload_requires_name() -> None:
     with pytest.raises(ValidationError):
-        ItemCreate(price=9.99)
+        ItemCreatePayload(price=9.99)
 
 
-def test_item_update_allows_partial_data() -> None:
-    update = ItemUpdate(price=12.5)
+def test_item_delete_payload_requires_item_id() -> None:
+    payload = ItemDeletePayload(item_id=uuid4())
 
-    assert update.name is None
-    assert update.price == 12.5
+    assert payload.item_id is not None

@@ -34,7 +34,7 @@ jobs:
       - name: Scan image for vulnerabilities
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: api-service-template:latest
+          image-ref: worker-service-template:latest
           format: table
           severity: HIGH,CRITICAL
           exit-code: "1"
@@ -42,6 +42,6 @@ jobs:
 
       - name: Smoke test image
         run: |
-          docker run -d --rm -p 8000:8000 --name smoke api-service-template:latest
+          docker run -d --rm -p 8000:8000 --name smoke worker-service-template:latest
           curl --fail --retry 5 --retry-delay 1 --retry-all-errors http://localhost:8000/utils/health
           docker stop smoke

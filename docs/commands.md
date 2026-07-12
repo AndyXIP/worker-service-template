@@ -6,14 +6,20 @@ This project uses [mise](https://mise.jdx.dev/) as the task runner and
 behavior matches CI.
 
 ```bash
-mise run dev         # start the app with reload (http://127.0.0.1:8000, /docs for Swagger)
+mise run dev         # start the worker (health check at http://127.0.0.1:8000/utils/health)
 mise run test        # full suite: tests/unit + tests/integration, with coverage
 mise run test-unit   # fast unit-only subset
 mise run check       # ruff check + ruff format --check + ty typecheck (what CI runs)
 mise run fix         # ruff check --fix + ruff format (also runs automatically as a pre-commit hook)
 mise run typecheck   # ty check src/ only
-mise run build       # docker build, tagged service-template:latest
+mise run build       # docker build, tagged worker-service-template:latest
 ```
+
+`mise run dev` seeds a couple of demo messages at startup (`local`
+environment only — see `main.py`'s `_seed_sample_messages`) so there's
+something to watch get processed in the structured logs without needing a
+real producer. There's no `--reload`: the app is a long-running dispatch
+loop rather than an ASGI app uvicorn can hot-reload the way it did before.
 
 Single test / single file:
 
