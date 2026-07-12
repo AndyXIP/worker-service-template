@@ -1,5 +1,5 @@
 [project]
-name = "api-service-template"
+name = "worker-service-template"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -16,6 +16,7 @@ dev = [
     "httpx2>=2.5.0",
     "pre-commit>=4.6.0",
     "pytest>=9.1.1",
+    "pytest-asyncio>=1.0.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.15.21",
     "ty>=0.0.57",
@@ -23,6 +24,7 @@ dev = [
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
+asyncio_mode = "auto"
 
 [tool.coverage.run]
 source = ["src"]
@@ -42,6 +44,3 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
-
-[tool.ruff.lint.flake8-bugbear]
-extend-immutable-calls = ["fastapi.Depends"]

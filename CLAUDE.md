@@ -4,12 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A FastAPI backend service template, not a finished product. The `items` resource
-under `src/` is a worked example (full CRUD, layered architecture, validation,
-error handling, tests) that exists purely to demonstrate the patterns a new
-resource should follow. When adapting this template into a real service, the
-`items` resource is deleted and replaced — everything else (Docker, CI,
-pre-commit, task runner, `core/`) is meant to be copied as-is.
+A message/task-queue worker service template, not a finished product —
+async processing off the request path, triggered by messages rather than
+HTTP calls. The `item` message processor under `src/` is a worked example
+(consuming `item.create`/`item.delete`, layered architecture, validation,
+retry/dead-letter handling, tests) that exists purely to demonstrate the
+patterns a new message type should follow. When adapting this template into
+a real service, the `item` processor is deleted and replaced — everything
+else (Docker, CI, pre-commit, task runner, `core/`) is meant to be copied
+as-is.
 
 ## Commands
 
@@ -20,18 +23,19 @@ list and single-test invocation.
 
 ## Architecture
 
-Strict layering — routes are thin controllers, schemas are DTOs at the API
-boundary only, and each layer talks solely to the one below it:
-`api/routes → services → repositories → domain`. `core/` holds cross-cutting
-infrastructure (config, logging, errors, auth) used by every layer.
-See [docs/architecture.md](docs/architecture.md) for the full breakdown of
-each layer's responsibilities.
+Strict layering — consumers are thin handlers, schemas are message-payload
+DTOs at the boundary only, and each layer talks solely to the one below it:
+`consumers → services → repositories → domain`. `core/` holds cross-cutting
+infrastructure (config, logging, queue, errors) used by every layer. There's
+no inbound HTTP API — `health.py` is a minimal `/utils/health` surface for
+Docker/k8s probes only. See [docs/architecture.md](docs/architecture.md) for
+the full breakdown of each layer's responsibilities.
 
 ## Testing conventions
 
 Unit tests mirror `src/` layer-by-layer; integration tests drive the full
-stack through `TestClient`. See [docs/testing.md](docs/testing.md) for
-fixture details and coverage requirements.
+dispatch loop via `consumers.dispatch.process_one`. See
+[docs/testing.md](docs/testing.md) for fixture details and coverage requirements.
 
 ## CI
 
@@ -40,7 +44,7 @@ See [docs/ci.md](docs/ci.md) for the workflow breakdown and `deploy.yml`'s statu
 
 ## Security
 
-Auth (`src/core/auth.py`) is a stub — presence-only bearer token check, no
-signature/expiry verification. CORS is opt-in via `CORS_ORIGINS`. See
-[docs/security.md](docs/security.md) for what's stubbed, what to replace
-before relying on it, and CORS footguns to avoid.
+There's no inbound HTTP request surface to authenticate or CORS-protect —
+only the unauthenticated `/utils/health` check. See
+[docs/security.md](docs/security.md) for the retry/dead-letter error
+taxonomy and the in-memory queue/repository's limitations.

@@ -1,55 +1,29 @@
-from typing import Any
+from enum import Enum
 
-import structlog
-from fastapi import FastAPI, Request, status
-from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 
-from core.auth import AuthenticationError
 from domain.errors import NotFoundError
 
-logger = structlog.get_logger(__name__)
+
+class DeliveryOutcome(Enum):
+    """What the dispatch loop should do with a message after a handler fails."""
+
+    RETRY = "retry"
+    DEAD_LETTER = "dead_letter"
 
 
-def _envelope(error_type: str, message: str, details: Any = None) -> dict[str, Any]:
-    return {"error": {"type": error_type, "message": message, "details": details}}
+def classify_error(exc: Exception, attempt: int, max_attempts: int) -> tuple[DeliveryOutcome, str]:
+    """Maps a handler exception to a delivery outcome and a short reason for logging.
 
-
-async def _handle_validation_error(request: Request, exc: Exception) -> JSONResponse:
-    assert isinstance(exc, RequestValidationError)
-    return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-        content=_envelope("validation_error", "Request validation failed", exc.errors()),
-    )
-
-
-async def _handle_not_found(request: Request, exc: Exception) -> JSONResponse:
-    assert isinstance(exc, NotFoundError)
-    return JSONResponse(
-        status_code=status.HTTP_404_NOT_FOUND,
-        content=_envelope("not_found", exc.message),
-    )
-
-
-async def _handle_authentication_error(request: Request, exc: Exception) -> JSONResponse:
-    assert isinstance(exc, AuthenticationError)
-    return JSONResponse(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        content=_envelope("authentication_error", exc.message),
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
-
-async def _handle_unhandled_exception(request: Request, exc: Exception) -> JSONResponse:
-    logger.exception("unhandled_exception", path=request.url.path)
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content=_envelope("internal_error", "An unexpected error occurred"),
-    )
-
-
-def register_exception_handlers(app: FastAPI) -> None:
-    app.add_exception_handler(RequestValidationError, _handle_validation_error)
-    app.add_exception_handler(NotFoundError, _handle_not_found)
-    app.add_exception_handler(AuthenticationError, _handle_authentication_error)
-    app.add_exception_handler(Exception, _handle_unhandled_exception)
+    `NotFoundError` and payload validation errors are permanent business
+    failures - retrying changes nothing, so they go straight to the
+    dead-letter queue. Anything else is treated as potentially transient and
+    retried up to `max_attempts` before being dead-lettered too.
+    """
+    if isinstance(exc, NotFoundError):
+        return DeliveryOutcome.DEAD_LETTER, "not_found"
+    if isinstance(exc, ValidationError):
+        return DeliveryOutcome.DEAD_LETTER, "validation_error"
+    if attempt < max_attempts:
+        return DeliveryOutcome.RETRY, "transient_error"
+    return DeliveryOutcome.DEAD_LETTER, "max_attempts_exceeded"

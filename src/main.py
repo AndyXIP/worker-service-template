@@ -1,58 +1,78 @@
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+import asyncio
 
 import structlog
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
 
-from api.routes import health, items
+from consumers.dispatch import Handler, run_forever
+from consumers.item import make_item_create_handler, make_item_delete_handler
 from core.config import get_settings
-from core.errors import register_exception_handlers
-from core.logging import RequestLoggingMiddleware, configure_logging
+from core.logging import configure_logging
+from core.queue import InMemoryMessageQueue, Message, MessageQueue
+from health import create_health_app
 from repositories.item import InMemoryItemRepository
+from services.item import ItemService
 
 logger = structlog.get_logger(__name__)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    settings = get_settings()
-    logger.info("starting_up", app_name=settings.app_name, environment=settings.environment)
-    yield
-    # No real resources to release here (no DB pool, no HTTP clients) - this
-    # is where that teardown would go once the service acquires any.
-    logger.info("shutting_down")
+def build_handlers(item_service: ItemService) -> dict[str, Handler]:
+    """The handler registry - maps a message's `type` to the handler that
+    processes it, the dispatch-loop equivalent of `app.include_router`."""
+    return {
+        "item.create": make_item_create_handler(item_service),
+        "item.delete": make_item_delete_handler(item_service),
+    }
 
 
-def create_app() -> FastAPI:
+async def _seed_sample_messages(queue: MessageQueue) -> None:
+    """Demo-only: stands in for whatever publishes to the real broker (an
+    upstream producer service, a webhook, ...) so `mise run dev` has
+    something to process out of the box. Nothing outside this process can
+    publish into an in-memory queue, so this goes away once a real
+    `MessageQueue` implementation replaces `InMemoryMessageQueue`.
+    """
+    await queue.publish(
+        Message(
+            type="item.create",
+            payload={"name": "Widget", "description": "A widget", "price": 9.99},
+        )
+    )
+    # Demonstrates the dead-letter path: this id was never created.
+    await queue.publish(
+        Message(type="item.delete", payload={"item_id": "00000000-0000-0000-0000-000000000000"})
+    )
+
+
+async def main() -> None:  # pragma: no cover - exercised by running the process, not by tests
     settings = get_settings()
     configure_logging(settings)
+    logger.info("starting_up", app_name=settings.app_name, environment=settings.environment)
 
-    app = FastAPI(title=settings.app_name, lifespan=lifespan)
-    app.state.item_repository = InMemoryItemRepository()
+    queue = InMemoryMessageQueue()
+    dead_letter_queue = InMemoryMessageQueue()
+    item_repository = InMemoryItemRepository()
+    item_service = ItemService(item_repository)
+    handlers = build_handlers(item_service)
 
-    register_exception_handlers(app)
-    app.add_middleware(RequestLoggingMiddleware)
+    if settings.environment == "local":
+        await _seed_sample_messages(queue)
 
-    if settings.cors_origins:
-        # allow_credentials=True means the browser will send cookies/auth headers
-        # on cross-origin requests from these origins. Keep allow_methods and
-        # allow_headers scoped to what this service actually needs - copying
-        # "*" wildcards here alongside allow_credentials is a common footgun
-        # once real auth is wired in. Widen only if a specific method/header
-        # is genuinely required.
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=settings.cors_origins,
-            allow_credentials=True,
-            allow_methods=["GET", "POST", "PATCH", "DELETE"],
-            allow_headers=["Authorization", "Content-Type"],
+    health_server = uvicorn.Server(
+        uvicorn.Config(
+            create_health_app(),
+            host="0.0.0.0",
+            port=settings.port,
+            log_config=None,
+            access_log=False,
+        )
+    )
+
+    async with asyncio.TaskGroup() as tg:
+        tg.create_task(health_server.serve())
+        tg.create_task(
+            run_forever(queue, dead_letter_queue, handlers, settings.max_delivery_attempts)
         )
 
-    app.include_router(health.router)
-    app.include_router(items.router)
 
-    return app
-
-
-app = create_app()
+if __name__ == "__main__":  # pragma: no cover - entrypoint, not exercised by tests
+    asyncio.run(main())

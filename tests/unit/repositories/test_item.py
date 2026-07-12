@@ -35,33 +35,6 @@ def test_get_missing_raises_not_found() -> None:
         repo.get(uuid4())
 
 
-def test_list_returns_all_items() -> None:
-    repo = InMemoryItemRepository()
-    first, second = make_item(), make_item()
-    repo.add(first)
-    repo.add(second)
-
-    assert {item.id for item in repo.list()} == {first.id, second.id}
-
-
-def test_update_replaces_existing_item() -> None:
-    repo = InMemoryItemRepository()
-    item = make_item()
-    repo.add(item)
-
-    updated = item.model_copy(update={"price": 19.99})
-    repo.update(updated)
-
-    assert repo.get(item.id).price == 19.99
-
-
-def test_update_missing_raises_not_found() -> None:
-    repo = InMemoryItemRepository()
-
-    with pytest.raises(ItemNotFoundError):
-        repo.update(make_item())
-
-
 def test_delete_removes_item() -> None:
     repo = InMemoryItemRepository()
     item = make_item()

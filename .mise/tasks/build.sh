@@ -3,4 +3,4 @@
 docker build \
   --build-arg UV_VERSION="$(mise current uv)" \
   --build-arg PYTHON_VERSION="$(mise current python)" \
-  -t api-service-template:latest .
+  -t worker-service-template:latest .
