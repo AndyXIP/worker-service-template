@@ -1,0 +1,6 @@
+# See https://docs.github.com/articles/about-code-owners
+#
+# Placeholder — replace with real usernames/teams for your repo. This file is
+# inert on its own; it only takes effect once branch protection requires
+# review from code owners.
+* @your-org/your-team

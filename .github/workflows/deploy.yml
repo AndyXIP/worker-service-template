@@ -1,0 +1,43 @@
+name: deploy
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy to
+        required: true
+        type: choice
+        options: [production]
+        default: production
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy (${{ inputs.environment }})
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v7.0.0
+      - name: Deploy
+        run: |
+          echo "No deploy target configured yet for '${{ inputs.environment }}'."
+          echo "Replace this step with your actual deploy, e.g.:"
+          echo "  - AWS:     aws-actions/configure-aws-credentials + ecs/eks/apprunner deploy"
+          echo "  - GCP:     google-github-actions/auth + gcloud run deploy"
+          echo "  - Fly.io / Render / Railway: their respective deploy actions"
+          echo "If you need OIDC federated auth (AWS/GCP), add 'id-token: write' to this workflow's permissions."
+          echo "Consider adding required reviewers on the 'production' Environment"
+          echo "(Settings > Environments > production) to gate manual prod deploys."

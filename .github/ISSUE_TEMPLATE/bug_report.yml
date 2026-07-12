@@ -1,0 +1,26 @@
+name: Bug report
+description: Something isn't working as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Environment / logs
+      description: Relevant `ENVIRONMENT`, `X-Request-ID`, or log output. Scrub any secrets/tokens before pasting.

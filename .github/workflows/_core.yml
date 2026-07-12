@@ -1,0 +1,47 @@
+name: core
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.0
+      - uses: ./.github/actions/mise-install
+      - run: mise run check
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.0
+      - uses: ./.github/actions/mise-install
+      - run: mise run test
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.0
+      - uses: ./.github/actions/mise-install
+      - run: mise run build
+
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: api-service-template:latest
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+
+      - name: Smoke test image
+        run: |
+          docker run -d --rm -p 8000:8000 --name smoke api-service-template:latest
+          curl --fail --retry 5 --retry-delay 1 --retry-all-errors http://localhost:8000/utils/health
+          docker stop smoke

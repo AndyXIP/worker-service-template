@@ -1,0 +1,17 @@
+.git
+.github
+.venv
+.mise
+.pytest_cache
+.ruff_cache
+__pycache__
+*.pyc
+tests
+README.md
+Dockerfile
+.dockerignore
+.gitignore
+.python-version
+.pre-commit-config.yaml
+*.local
+*.local.*

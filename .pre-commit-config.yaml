@@ -1,0 +1,22 @@
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: fix
+        name: fix
+        entry: mise run fix
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+      - id: typecheck
+        name: type check
+        entry: mise run typecheck
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
